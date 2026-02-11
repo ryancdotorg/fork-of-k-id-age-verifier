@@ -6,7 +6,7 @@ const K_ID_DEPLOYMENT_ID = '20260210222654-016f063-production';
 const K_ID_PRIVATELY_ACTION_ID = '40dc500368168e3130ea4625c535d5a9bbbf0243f1';
 const K_ID_NEXT_ROUTER_TREE =
 	'%5B%22%22%2C%7B%22children%22%3A%5B%22verify%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%2Ctrue%5D';
-const PRIVATELY_URL_REGEX = /(https:\/\/[a-z0-9]+\.cloudfront\.net\/.*)(?=:\{)/	
+const PRIVATELY_URL_REGEX = /(https:\/\/[a-z0-9]+\.cloudfront\.net\/.*)(?=:\{)/;
 
 const jsonResponse = (body: unknown, status: number = 200, extraHeaders: object = {}) =>
 	new Response(JSON.stringify(body), {
@@ -748,7 +748,13 @@ export const POST = async (event: RequestEvent) => {
 	const { type, identifier }: { type: string; identifier: string } = await event.request.json();
 
 	if (type === 'webview') {
-		const webviewUrl = new URL(identifier);
+		let webviewUrl: URL;
+		try {
+			webviewUrl = new URL(identifier);
+		} catch (e) {
+			return jsonResponse({ error: 'error parsing webview url' }, 400);
+		}
+
 		if (webviewUrl.host !== 'family.k-id.com' || webviewUrl.pathname !== '/verify') {
 			return jsonResponse({ error: 'unexpected webview url' }, 400);
 		}
@@ -764,42 +770,110 @@ export const POST = async (event: RequestEvent) => {
 		}
 
 		const payload = JSON.parse(atob(parts[1]));
-		 
+
 		// fetch the webview first
-		await fetch(webviewUrl)
-		const privately = await fetch(webviewUrl, {
+		await fetch(webviewUrl, {
+			headers: {
+				'User-Agent': userAgent,
+				accept: '*/*',
+				'accept-language': location.lang,
+				priority: 'u=1, i',
+				'sec-fetch-dest': 'empty',
+				'sec-fetch-mode': 'cors',
+				'sec-fetch-site': 'cross-site',
+				Origin: 'https://family.k-id.com',
+				Referer: identifier
+			}
+		});
+
+		const privatelyActionRes = await fetch(webviewUrl, {
 			method: 'POST',
 			headers: {
-                'User-Agent': userAgent,
-                accept: '*/*',
-                'accept-language': location.lang,
-                priority: 'u=1, i',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'cross-site',
-                'Next-Action': K_ID_PRIVATELY_ACTION_ID,
-                'Next-Router-State-Tree': K_ID_NEXT_ROUTER_TREE,
-                'X-Deployment-Id': K_ID_DEPLOYMENT_ID,
-                'Content-Type': 'application/json',
-                Origin: 'https://family.k-id.com',
-                Referer: identifier
-            },
-			body: JSON.stringify([{"verificationId":payload.jti,"useBranding":true,"attemptId":crypto.randomUUID()}])
-		}).then(res => res.text());
+				'User-Agent': userAgent,
+				accept: '*/*',
+				'accept-language': location.lang,
+				priority: 'u=1, i',
+				'sec-fetch-dest': 'empty',
+				'sec-fetch-mode': 'cors',
+				'sec-fetch-site': 'cross-site',
+				'Next-Action': K_ID_PRIVATELY_ACTION_ID,
+				'Next-Router-State-Tree': K_ID_NEXT_ROUTER_TREE,
+				'X-Deployment-Id': K_ID_DEPLOYMENT_ID,
+				'Content-Type': 'application/json',
+				Origin: 'https://family.k-id.com',
+				Referer: identifier
+			},
+			body: JSON.stringify([
+				{ verificationId: payload.jti, useBranding: true, attemptId: crypto.randomUUID() }
+			])
+		});
 
-		const match = privately.match(PRIVATELY_URL_REGEX);
-		if (match) {
-			const privatelyUrl = new URL(match[1]);
-			const privatelyToken = privatelyUrl.searchParams.get('token');
-			if (!privatelyToken) {
-				return jsonResponse({ error: 'no privately token' }, 400);
-			}
-			await verify(userAgent, location, privatelyToken);
-		} else {
-			return jsonResponse({ error: 'no privately url found in response' }, 400);	
+		if (!privatelyActionRes.ok) {
+			return jsonResponse(
+				{
+					error: `failed to execute k-id privately action (status=${privatelyActionRes.status})`
+				},
+				500
+			);
 		}
 
-		return jsonResponse({ success: true }, 200);
+		const privatelyActionBody = await privatelyActionRes.text();
+		const match = privatelyActionBody.match(PRIVATELY_URL_REGEX);
+
+		if (!match) {
+			return jsonResponse({ error: 'no privately url found in response' }, 500);
+		}
+
+		const privatelyUrl = new URL(match[1]);
+		const privatelyToken = privatelyUrl.searchParams.get('token');
+
+		if (!privatelyToken) {
+			return jsonResponse({ error: 'no privately token' }, 500);
+		}
+
+		await verify(userAgent, location, privatelyToken);
+
+		return jsonResponse({ success: true });
+	}
+
+	if (type === 'qr_link') {
+		let qrCodeUrl: URL;
+		try {
+			qrCodeUrl = new URL(identifier);
+		} catch (e) {
+			return jsonResponse({ error: 'error parsing qr code url' }, 400);
+		}
+
+		const shortlinkId = qrCodeUrl.searchParams.get('sl');
+		if (!shortlinkId) {
+			return jsonResponse({ error: 'failed to get shortlink id from qr code url' }, 400);
+		}
+
+		const res = await fetch(`${BASE_URL}/shortlinks/${encodeURIComponent(shortlinkId)}`, {
+			headers: {
+				'User-Agent': userAgent,
+				accept: '*/*',
+				'accept-language': location.lang,
+				priority: 'u=1, i',
+				'sec-fetch-dest': 'empty',
+				'sec-fetch-mode': 'cors',
+				'sec-fetch-site': 'cross-site'
+			}
+		});
+		if (!res.ok) {
+			return jsonResponse(`failed to get shortlink (status=${res.status})`, 400);
+		}
+
+		const data = await res.json();
+		const originalUrl = new URL(data.Item.original_url.S.replace('#', ''));
+		const token = originalUrl.searchParams.get('token');
+		if (!token) {
+			return jsonResponse({ error: 'token not found in original url' }, 500);
+		}
+
+		await verify(userAgent, location, token);
+
+		return jsonResponse({ success: true });
 	}
 
 	return jsonResponse({ error: 'unexpected type' }, 400);

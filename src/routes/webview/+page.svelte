@@ -31,7 +31,7 @@
 	});
 </script>
 
-<div class="flex min-h-screen w-screen items-center justify-center text-3xl">
+<div class="flex min-h-screen w-screen flex-col items-center justify-center text-center">
 	{#if webviewUrl}
 		{#if success}
 			<p class="text-green-500">your account is now age verified. enjoy</p>
@@ -41,6 +41,16 @@
 			<p>automatically verifying your age</p>
 		{/if}
 	{:else}
-		<p>invalid url</p>
+		<p>
+			<span class="text-red-500">invalid url</span> <br /> did you mean to go to
+			<a class="underline" href="/">the instructions page?</a>
+		</p>
 	{/if}
+</div>
+<div class="absolute bottom-4 flex w-screen justify-center">
+	<p class="text-center text-white/50">
+		made by <a class="underline" href="https://kibty.town" target="_blank">xyzeva</a> and
+		<a class="underline" href="https://github.com/Dziurwa14" target="_blank">Dziurwa</a>, greetz to
+		<a class="underline" href="https://amplitudes.me/" target="_blank">amplitudes</a> (for previous work)
+	</p>
 </div>

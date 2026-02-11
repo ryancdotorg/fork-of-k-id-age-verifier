@@ -1,17 +1,24 @@
-<svelte:head>
-	<title>discord age verifier</title>
-</svelte:head>
+<script lang="ts">
+	let qrCodeUrl = $state<string | null>(null);
+	let qrCodeError = $state<string | null>(null);
+	let qrCodeSuccess = $state(false);
+</script>
 
 <div class="mx-auto w-screen max-w-6xl items-center p-5 pb-16">
-	<h1 class="mt-16 text-center text-3xl font-extrabold">discord age verifier</h1>
-	<p class="text-center">age verifies your discord account automatically as an adult</p>
+	<h1 class="mt-16 text-center text-3xl font-extrabold">
+		discord/twitch/kick/snapchat age verifier
+	</h1>
+	<p class="text-center">
+		age verifies your account automatically as an adult on any website using k-id
+	</p>
 	<p class="mt-4 text-center text-white/50">
-		made by <a class="underline" href="https://eva.ac" target="_blank">xyzeva</a> and
+		made by <a class="underline" href="https://kibty.town" target="_blank">xyzeva</a> and
 		<a class="underline" href="https://github.com/Dziurwa14" target="_blank">Dziurwa</a>, greetz to
 		<a class="underline" href="https://amplitudes.me/" target="_blank">amplitudes</a> (for previous work)
 	</p>
 
-	<p class="mt-8 text-left">
+	<h2 class="mt-8 text-2xl font-bold">how to verify on discord</h2>
+	<p class="mt-4 text-left">
 		it <span class="font-bold">doesn't matter</span> if you are in the UK or similar region that
 		currently has access to this, this will verify your account for the future global rollout in
 		march aswell as current. to use, simply paste this script into your discord console by going to
@@ -48,7 +55,7 @@ findByProps = (...props) => &#123;
 api = findByProps('Bo','oh').Bo
 
 // send a api request to discord /age-verification/verify and then redirect the page to our website
-window.location.href = `https://discord-verifier.eva.ac/webview?url=$&#123;encodeURIComponent((await api.post(&#123; url: '/age-verification/verify', body: &#123; method: 3 &#125;&#125;)).body.verification_webview_url)&#125;`</pre>
+window.location.href = `https://age-verifier.kibty.town/webview?url=$&#123;encodeURIComponent((await api.post(&#123; url: '/age-verification/verify', body: &#123; method: 3 &#125;&#125;)).body.verification_webview_url)&#125;`</pre>
 	<p class="text-center text-white/50">
 		(feel free to read the code, we made it readable and we have nothing to hide)
 	</p>
@@ -59,7 +66,68 @@ window.location.href = `https://discord-verifier.eva.ac/webview?url=$&#123;encod
 	</p>
 	<p class="mt-2 text-left">congrats! your discord account is now age verified.</p>
 
-	<h2 class="mt-12 text-2xl font-bold">how does this work</h2>
+	<h2 class="mt-4 text-2xl font-bold">
+		how to verify on other platforms (twitch, kick, snapchat, ...others)
+	</h2>
+	<p>
+		navigate to the age verification page and choose selfie, from there, get the url of the qr code
+		and put it in this input box, and press verify
+	</p>
+
+	<div class="mt-4 flex gap-4">
+		<input
+			class="w-full border-2 border-white/50 p-2"
+			bind:value={qrCodeUrl}
+			placeholder="https://..."
+		/>
+		<button
+			class="w-24 border-2 border-white/50 p-2 hover:cursor-pointer"
+			onclick={(e) => {
+				e.preventDefault();
+				qrCodeError = null;
+				qrCodeSuccess = false;
+
+				if (!qrCodeUrl) {
+					qrCodeError = "you didn't enter a qr code url";
+					return;
+				}
+
+				fetch('/api/verify', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						type: 'qr_link',
+						identifier: qrCodeUrl
+					})
+				})
+					.then(async (r) => {
+						if (!r.ok) {
+							qrCodeError = await r.text().catch(() => 'unexpected error');
+							return;
+						}
+
+						qrCodeSuccess = true;
+					})
+					.catch((e) => {
+						console.error('error sending verify request', e);
+						qrCodeError = 'unexpected error, please check your browser console.';
+					});
+			}}>verify</button
+		>
+	</div>
+	{#if qrCodeSuccess}
+		<p class="mt-4 text-green-500">
+			your account has successfully been verified. go back to the site tab to continue
+		</p>
+	{:else if qrCodeError}
+		<p class="mt-4 text-red-500">
+			{qrCodeError}
+		</p>
+	{/if}
+
+	<h2 class="mt-8 text-2xl font-bold">how does this work</h2>
 	<p>
 		k-id, the age verification provider discord uses doesn't store or send your face to the server.
 		instead, it sends a bunch of metadata about your face and general process details. while this is

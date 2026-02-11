@@ -464,33 +464,13 @@ async function verify(qrCodeUrlStr: string) {
 					distancing: {
 						screenDetectionConfidence: Array.from({ length: 2 }, () => randomFloat(0.01, 0.03)),
 						screenFaceOverlap: [0, 0],
-						screenBoundingBoxes: [
-							[],
-							[
-								{
-									x: 1,
-									y: 60,
-									width: 158,
-									height: 335
-								}
-							]
-						],
+						screenBoundingBoxes: [Array.from({ length: 2 }, generateBoundingBox)],
 						alternativeScore: Array.from({ length: 2 }, () => randomFloat(0.2, 0.9))
 					},
 					closing: {
 						screenDetectionConfidence: Array.from({ length: 2 }, () => randomFloat(0.01, 0.03)),
 						screenFaceOverlap: [0, 0],
-						screenBoundingBoxes: [
-							[
-								{
-									x: 370,
-									y: 233,
-									width: 58,
-									height: 85
-								}
-							],
-							[]
-						],
+						screenBoundingBoxes: [Array.from({ length: 2 }, generateBoundingBox)],
 						alternativeScore: Array.from({ length: 2 }, () => randomFloat(0.2, 0.9))
 					},
 					postChallenge: {
@@ -579,9 +559,9 @@ async function verify(qrCodeUrlStr: string) {
 					txFinishedInLandscapeMode: false
 				},
 				initializationCharacteristics: {
-					cropperInitTime: 2718,
-					coreInitTime: 6746,
-					pageLoadTime: 602.0999999996275,
+					cropperInitTime: randomInt(150, 250),
+					coreInitTime: randomInt(800, 1000),
+					pageLoadTime: randomInt(250, 350),
 					from_qr_scan: false,
 					blendShapesAvailable: true
 				},
